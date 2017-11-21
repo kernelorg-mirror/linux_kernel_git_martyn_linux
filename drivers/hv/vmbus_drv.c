@@ -65,7 +65,7 @@ static int hyperv_panic_event(struct notifier_block *nb, unsigned long val,
 
 	regs = current_pt_regs();
 
-	hyperv_report_panic(regs);
+	hyperv_report_panic(regs, val);
 	return NOTIFY_DONE;
 }
 
@@ -75,7 +75,7 @@ static int hyperv_die_event(struct notifier_block *nb, unsigned long val,
 	struct die_args *die = (struct die_args *)args;
 	struct pt_regs *regs = die->regs;
 
-	hyperv_report_panic(regs);
+	hyperv_report_panic(regs, val);
 	return NOTIFY_DONE;
 }
 
@@ -835,6 +835,8 @@ void vmbus_on_msg_dpc(unsigned long data)
 
 	hdr = (struct vmbus_channel_message_header *)msg->u.payload;
 
+	trace_vmbus_on_msg_dpc(hdr);
+
 	if (hdr->msgtype >= CHANNELMSG_COUNT) {
 		WARN_ONCE(1, "unknown msgtype=%d\n", hdr->msgtype);
 		goto msg_handled;
@@ -943,6 +945,10 @@ static void vmbus_chan_sched(struct hv_per_cpu_context *hv_cpu)
 
 			if (channel->rescind)
 				continue;
+
+			trace_vmbus_chan_sched(channel);
+
+			++channel->interrupts;
 
 			switch (channel->callback_mode) {
 			case HV_CALL_ISR:
@@ -1237,6 +1243,18 @@ static ssize_t channel_latency_show(const struct vmbus_channel *channel,
 }
 VMBUS_CHAN_ATTR(latency, S_IRUGO, channel_latency_show, NULL);
 
+static ssize_t channel_interrupts_show(const struct vmbus_channel *channel, char *buf)
+{
+	return sprintf(buf, "%llu\n", channel->interrupts);
+}
+VMBUS_CHAN_ATTR(interrupts, S_IRUGO, channel_interrupts_show, NULL);
+
+static ssize_t channel_events_show(const struct vmbus_channel *channel, char *buf)
+{
+	return sprintf(buf, "%llu\n", channel->sig_events);
+}
+VMBUS_CHAN_ATTR(events, S_IRUGO, channel_events_show, NULL);
+
 static struct attribute *vmbus_chan_attrs[] = {
 	&chan_attr_out_mask.attr,
 	&chan_attr_in_mask.attr,
@@ -1245,6 +1263,8 @@ static struct attribute *vmbus_chan_attrs[] = {
 	&chan_attr_cpu.attr,
 	&chan_attr_pending.attr,
 	&chan_attr_latency.attr,
+	&chan_attr_interrupts.attr,
+	&chan_attr_events.attr,
 	NULL
 };
 
@@ -1695,7 +1715,7 @@ static int __init hv_acpi_init(void)
 {
 	int ret, t;
 
-	if (x86_hyper != &x86_hyper_ms_hyperv)
+	if (x86_hyper_type != X86_HYPER_MS_HYPERV)
 		return -ENODEV;
 
 	init_completion(&probe_event);
