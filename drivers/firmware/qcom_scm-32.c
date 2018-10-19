@@ -147,7 +147,7 @@ static u32 smc(u32 cmd_addr)
 			"smc	#0	@ switch to secure world\n"
 			: "=r" (r0)
 			: "r" (r0), "r" (r1), "r" (r2)
-			: "r3");
+			: "r3", "r12");
 	} while (r0 == QCOM_SCM_INTERRUPTED);
 
 	return r0;
@@ -263,7 +263,7 @@ static s32 qcom_scm_call_atomic1(u32 svc, u32 cmd, u32 arg1)
 			"smc    #0      @ switch to secure world\n"
 			: "=r" (r0)
 			: "r" (r0), "r" (r1), "r" (r2)
-			: "r3");
+			: "r3", "r12");
 	return r0;
 }
 
@@ -298,7 +298,7 @@ static s32 qcom_scm_call_atomic2(u32 svc, u32 cmd, u32 arg1, u32 arg2)
 			"smc    #0      @ switch to secure world\n"
 			: "=r" (r0)
 			: "r" (r0), "r" (r1), "r" (r2), "r" (r3)
-			);
+			: "r12");
 	return r0;
 }
 
@@ -328,7 +328,7 @@ u32 qcom_scm_get_version(void)
 			"smc	#0	@ switch to secure world\n"
 			: "=r" (r0), "=r" (r1)
 			: "r" (r0), "r" (r1)
-			: "r2", "r3");
+			: "r2", "r3", "r12");
 	} while (r0 == QCOM_SCM_INTERRUPTED);
 
 	version = r1;
@@ -583,6 +583,13 @@ int __qcom_scm_set_remote_state(struct device *dev, u32 state, u32 id)
 			    &req, sizeof(req), &scm_ret, sizeof(scm_ret));
 
 	return ret ? : le32_to_cpu(scm_ret);
+}
+
+int __qcom_scm_assign_mem(struct device *dev, phys_addr_t mem_region,
+			  size_t mem_sz, phys_addr_t src, size_t src_sz,
+			  phys_addr_t dest, size_t dest_sz)
+{
+	return -ENODEV;
 }
 
 int __qcom_scm_restore_sec_cfg(struct device *dev, u32 device_id,

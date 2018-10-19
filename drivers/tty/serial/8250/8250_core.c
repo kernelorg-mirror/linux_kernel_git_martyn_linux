@@ -323,9 +323,9 @@ static int univ8250_setup_irq(struct uart_8250_port *up)
 	 * the port is opened so this value needs to be preserved.
 	 */
 	if (up->bugs & UART_BUG_THRE) {
-		pr_debug("ttyS%d - using backup timer\n", serial_index(port));
+		pr_debug("%s - using backup timer\n", port->name);
 
-		up->timer.function = (TIMER_FUNC_TYPE)serial8250_backup_timeout;
+		up->timer.function = serial8250_backup_timeout;
 		mod_timer(&up->timer, jiffies +
 			  uart_poll_timeout(port) + HZ / 5);
 	}
@@ -348,7 +348,7 @@ static void univ8250_release_irq(struct uart_8250_port *up)
 	struct uart_port *port = &up->port;
 
 	del_timer_sync(&up->timer);
-	up->timer.function = (TIMER_FUNC_TYPE)serial8250_timeout;
+	up->timer.function = serial8250_timeout;
 	if (port->irq)
 		serial_unlink_irq_chain(up);
 }
@@ -1023,6 +1023,10 @@ int serial8250_register_8250_port(struct uart_8250_port *up)
 			uart->port.get_mctrl = up->port.get_mctrl;
 		if (up->port.set_mctrl)
 			uart->port.set_mctrl = up->port.set_mctrl;
+		if (up->port.get_divisor)
+			uart->port.get_divisor = up->port.get_divisor;
+		if (up->port.set_divisor)
+			uart->port.set_divisor = up->port.set_divisor;
 		if (up->port.startup)
 			uart->port.startup = up->port.startup;
 		if (up->port.shutdown)

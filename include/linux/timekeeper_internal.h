@@ -117,6 +117,8 @@ struct timekeeper {
 	s64			ntp_error;
 	u32			ntp_error_shift;
 	u32			ntp_err_mult;
+	/* Flag used to avoid updating NTP twice with same second */
+	u32			skip_second_overflow;
 #ifdef CONFIG_DEBUG_TIMEKEEPING
 	long			last_warning;
 	/*
@@ -134,13 +136,6 @@ struct timekeeper {
 #ifdef CONFIG_GENERIC_TIME_VSYSCALL
 
 extern void update_vsyscall(struct timekeeper *tk);
-extern void update_vsyscall_tz(void);
-
-#elif defined(CONFIG_GENERIC_TIME_VSYSCALL_OLD)
-
-extern void update_vsyscall_old(struct timespec *ts, struct timespec *wtm,
-				struct clocksource *c, u32 mult,
-				u64 cycle_last);
 extern void update_vsyscall_tz(void);
 
 #else

@@ -70,7 +70,7 @@ static struct platform_device dsmg600_flash = {
 };
 
 static struct gpiod_lookup_table dsmg600_i2c_gpiod_table = {
-	.dev_id		= "i2c-gpio",
+	.dev_id		= "i2c-gpio.0",
 	.table		= {
 		GPIO_LOOKUP_IDX("IXP4XX_GPIO_CHIP", DSMG600_SDA_PIN,
 				NULL, 0, GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN),
@@ -179,10 +179,10 @@ static int power_button_countdown;
 /* Must hold the button down for at least this many counts to be processed */
 #define PBUTTON_HOLDDOWN_COUNT 4 /* 2 secs */
 
-static void dsmg600_power_handler(unsigned long data);
+static void dsmg600_power_handler(struct timer_list *unused);
 static DEFINE_TIMER(dsmg600_power_timer, dsmg600_power_handler);
 
-static void dsmg600_power_handler(unsigned long data)
+static void dsmg600_power_handler(struct timer_list *unused)
 {
 	/* This routine is called twice per second to check the
 	 * state of the power button.

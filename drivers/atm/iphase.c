@@ -75,7 +75,7 @@ static void desc_dbg(IADEV *iadev);
 static IADEV *ia_dev[8];
 static struct atm_dev *_ia_dev[8];
 static int iadev_count;
-static void ia_led_timer(unsigned long arg);
+static void ia_led_timer(struct timer_list *unused);
 static DEFINE_TIMER(ia_timer, ia_led_timer);
 static int IA_TX_BUF = DFL_TX_BUFFERS, IA_TX_BUF_SZ = DFL_TX_BUF_SZ;
 static int IA_RX_BUF = DFL_RX_BUFFERS, IA_RX_BUF_SZ = DFL_RX_BUF_SZ;
@@ -671,7 +671,7 @@ static void ia_tx_poll (IADEV *iadev) {
           if ((vcc->pop) && (skb1->len != 0))
           {
              vcc->pop(vcc, skb1);
-             IF_EVENT(printk("Tansmit Done - skb 0x%lx return\n",
+             IF_EVENT(printk("Transmit Done - skb 0x%lx return\n",
                                                           (long)skb1);)
           }
           else 
@@ -1618,7 +1618,7 @@ static int rx_init(struct atm_dev *dev)
 	skb_queue_head_init(&iadev->rx_dma_q);  
 	iadev->rx_free_desc_qhead = NULL;   
 
-	iadev->rx_open = kzalloc(4 * iadev->num_vc, GFP_KERNEL);
+	iadev->rx_open = kcalloc(iadev->num_vc, sizeof(void *), GFP_KERNEL);
 	if (!iadev->rx_open) {
 		printk(KERN_ERR DEV_LABEL "itf %d couldn't get free page\n",
 		dev->number);  
@@ -1665,7 +1665,7 @@ static void tx_intr(struct atm_dev *dev)
 	status = readl(iadev->seg_reg+SEG_INTR_STATUS_REG);  
         if (status & TRANSMIT_DONE){
 
-           IF_EVENT(printk("Tansmit Done Intr logic run\n");)
+           IF_EVENT(printk("Transmit Done Intr logic run\n");)
            spin_lock_irqsave(&iadev->tx_lock, flags);
            ia_tx_poll(iadev);
            spin_unlock_irqrestore(&iadev->tx_lock, flags);
@@ -2432,7 +2432,7 @@ static void ia_update_stats(IADEV *iadev) {
     return;
 }
   
-static void ia_led_timer(unsigned long arg) {
+static void ia_led_timer(struct timer_list *unused) {
  	unsigned long flags;
   	static u_char blinking[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         u_char i;
@@ -3147,7 +3147,7 @@ static int ia_proc_read(struct atm_dev *dev,loff_t *pos,char *page)
                            "  Size of Tx Buffer  :  %u\n"
                            "  Number of Rx Buffer:  %u\n"
                            "  Size of Rx Buffer  :  %u\n"
-                           "  Packets Receiverd  :  %u\n"
+                           "  Packets Received   :  %u\n"
                            "  Packets Transmitted:  %u\n"
                            "  Cells Received     :  %u\n"
                            "  Cells Transmitted  :  %u\n"

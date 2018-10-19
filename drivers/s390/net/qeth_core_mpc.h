@@ -10,6 +10,7 @@
 #define __QETH_CORE_MPC_H__
 
 #include <asm/qeth.h>
+#include <uapi/linux/if_ether.h>
 
 #define IPA_PDU_HEADER_SIZE	0x40
 #define QETH_IPA_PDU_LEN_TOTAL(buffer) (buffer + 0x0e)
@@ -25,7 +26,6 @@ extern unsigned char IPA_PDU_HEADER[];
 #define QETH_SEQ_NO_LENGTH	4
 #define QETH_MPC_TOKEN_LENGTH	4
 #define QETH_MCL_LENGTH		4
-#define OSA_ADDR_LEN		6
 
 #define QETH_TIMEOUT		(10 * HZ)
 #define QETH_IPA_TIMEOUT	(45 * HZ)
@@ -34,6 +34,18 @@ extern unsigned char IPA_PDU_HEADER[];
 #define QETH_CLEAR_CHANNEL_PARM	-10
 #define QETH_HALT_CHANNEL_PARM	-11
 #define QETH_RCD_PARM -12
+
+static inline bool qeth_intparm_is_iob(unsigned long intparm)
+{
+	switch (intparm) {
+	case QETH_CLEAR_CHANNEL_PARM:
+	case QETH_HALT_CHANNEL_PARM:
+	case QETH_RCD_PARM:
+	case 0:
+		return false;
+	}
+	return true;
+}
 
 /*****************************************************************************/
 /* IP Assist related definitions                                             */
@@ -51,6 +63,9 @@ enum qeth_card_types {
 	QETH_CARD_TYPE_OSM     = 3,
 	QETH_CARD_TYPE_OSX     = 2,
 };
+
+#define IS_IQD(card)	((card)->info.type == QETH_CARD_TYPE_IQD)
+#define IS_OSN(card)	((card)->info.type == QETH_CARD_TYPE_OSN)
 
 #define QETH_MPC_DIFINFO_LEN_INDICATES_LINK_TYPE 0x18
 /* only the first two bytes are looked at in qeth_get_cardname_short */
@@ -234,6 +249,8 @@ enum qeth_ipa_funcs {
 	IPA_QUERY_ARP_ASSIST	= 0x00040000L,
 	IPA_INBOUND_TSO         = 0x00080000L,
 	IPA_OUTBOUND_TSO        = 0x00100000L,
+	IPA_INBOUND_CHECKSUM_V6 = 0x00400000L,
+	IPA_OUTBOUND_CHECKSUM_V6 = 0x00800000L,
 };
 
 /* SETIP/DELIP IPA Command: ***************************************************/
@@ -416,12 +433,11 @@ struct qeth_query_cmds_supp {
 } __attribute__ ((packed));
 
 struct qeth_change_addr {
-	__u32 cmd;
-	__u32 addr_size;
-	__u32 no_macs;
-	__u8 addr[OSA_ADDR_LEN];
-} __attribute__ ((packed));
-
+	u32 cmd;
+	u32 addr_size;
+	u32 no_macs;
+	u8 addr[ETH_ALEN];
+};
 
 struct qeth_snmp_cmd {
 	__u8  token[16];
@@ -781,8 +797,8 @@ enum qeth_ipa_arp_return_codes {
 	QETH_IPA_ARP_RC_Q_NO_DATA    = 0x0008,
 };
 
-extern char *qeth_get_ipa_msg(enum qeth_ipa_return_codes rc);
-extern char *qeth_get_ipa_cmd_name(enum qeth_ipa_cmds cmd);
+extern const char *qeth_get_ipa_msg(enum qeth_ipa_return_codes rc);
+extern const char *qeth_get_ipa_cmd_name(enum qeth_ipa_cmds cmd);
 
 #define QETH_SETASS_BASE_LEN (sizeof(struct qeth_ipacmd_hdr) + \
 			       sizeof(struct qeth_ipacmd_setassparms_hdr))
@@ -801,10 +817,6 @@ extern char *qeth_get_ipa_cmd_name(enum qeth_ipa_cmds cmd);
 /*****************************************************************************/
 /* END OF   IP Assist related definitions                                    */
 /*****************************************************************************/
-
-
-extern unsigned char WRITE_CCW[];
-extern unsigned char READ_CCW[];
 
 extern unsigned char CM_ENABLE[];
 #define CM_ENABLE_SIZE 0x63

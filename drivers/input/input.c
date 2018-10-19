@@ -480,11 +480,19 @@ EXPORT_SYMBOL(input_inject_event);
  */
 void input_alloc_absinfo(struct input_dev *dev)
 {
-	if (!dev->absinfo)
-		dev->absinfo = kcalloc(ABS_CNT, sizeof(*dev->absinfo),
-					GFP_KERNEL);
+	if (dev->absinfo)
+		return;
 
-	WARN(!dev->absinfo, "%s(): kcalloc() failed?\n", __func__);
+	dev->absinfo = kcalloc(ABS_CNT, sizeof(*dev->absinfo), GFP_KERNEL);
+	if (!dev->absinfo) {
+		dev_err(dev->dev.parent ?: &dev->dev,
+			"%s: unable to allocate memory\n", __func__);
+		/*
+		 * We will handle this allocation failure in
+		 * input_register_device() when we refuse to register input
+		 * device with ABS bits but without absinfo.
+		 */
+	}
 }
 EXPORT_SYMBOL(input_alloc_absinfo);
 
@@ -1048,12 +1056,12 @@ static inline void input_wakeup_procfs_readers(void)
 	wake_up(&input_devices_poll_wait);
 }
 
-static unsigned int input_proc_devices_poll(struct file *file, poll_table *wait)
+static __poll_t input_proc_devices_poll(struct file *file, poll_table *wait)
 {
 	poll_wait(file, &input_devices_poll_wait, wait);
 	if (file->f_version != input_devices_state) {
 		file->f_version = input_devices_state;
-		return POLLIN | POLLRDNORM;
+		return EPOLLIN | EPOLLRDNORM;
 	}
 
 	return 0;
@@ -1943,8 +1951,7 @@ void input_set_capability(struct input_dev *dev, unsigned int type, unsigned int
 		break;
 
 	default:
-		pr_err("input_set_capability: unknown type %u (code %u)\n",
-		       type, code);
+		pr_err("%s: unknown type %u (code %u)\n", __func__, type, code);
 		dump_stack();
 		return;
 	}
@@ -2047,7 +2054,7 @@ static void devm_input_device_unregister(struct device *dev, void *res)
  */
 void input_enable_softrepeat(struct input_dev *dev, int delay, int period)
 {
-	dev->timer.function = (TIMER_FUNC_TYPE)input_repeat_key;
+	dev->timer.function = input_repeat_key;
 	dev->rep[REP_DELAY] = delay;
 	dev->rep[REP_PERIOD] = period;
 }

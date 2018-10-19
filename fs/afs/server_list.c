@@ -17,7 +17,7 @@ void afs_put_serverlist(struct afs_net *net, struct afs_server_list *slist)
 {
 	int i;
 
-	if (refcount_dec_and_test(&slist->usage)) {
+	if (slist && refcount_dec_and_test(&slist->usage)) {
 		for (i = 0; i < slist->nr_servers; i++) {
 			afs_put_cb_interest(net, slist->servers[i].cb_interest);
 			afs_put_server(net, slist->servers[i].server);
@@ -49,6 +49,7 @@ struct afs_server_list *afs_alloc_server_list(struct afs_cell *cell,
 		goto error;
 
 	refcount_set(&slist->usage, 1);
+	rwlock_init(&slist->lock);
 
 	/* Make sure a records exists for each server in the list. */
 	for (i = 0; i < vldb->nr_servers; i++) {
@@ -58,14 +59,17 @@ struct afs_server_list *afs_alloc_server_list(struct afs_cell *cell,
 		server = afs_lookup_server(cell, key, &vldb->fs_server[i]);
 		if (IS_ERR(server)) {
 			ret = PTR_ERR(server);
-			if (ret == -ENOENT)
+			if (ret == -ENOENT ||
+			    ret == -ENOMEDIUM)
 				continue;
 			goto error_2;
 		}
 
-		/* Insertion-sort by server pointer */
+		/* Insertion-sort by UUID */
 		for (j = 0; j < slist->nr_servers; j++)
-			if (slist->servers[j].server >= server)
+			if (memcmp(&slist->servers[j].server->uuid,
+				   &server->uuid,
+				   sizeof(server->uuid)) >= 0)
 				break;
 		if (j < slist->nr_servers) {
 			if (slist->servers[j].server == server) {

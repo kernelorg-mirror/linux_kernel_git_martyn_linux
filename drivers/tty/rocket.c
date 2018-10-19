@@ -86,7 +86,7 @@
 
 /****** RocketPort Local Variables ******/
 
-static void rp_do_poll(unsigned long dummy);
+static void rp_do_poll(struct timer_list *unused);
 
 static struct tty_driver *rocket_driver;
 
@@ -525,7 +525,7 @@ static void rp_handle_port(struct r_port *info)
 /*
  *  The top level polling routine.  Repeats every 1/100 HZ (10ms).
  */
-static void rp_do_poll(unsigned long dummy)
+static void rp_do_poll(struct timer_list *unused)
 {
 	CONTROLLER_t *ctlp;
 	int ctrl, aiop, ch, line;
@@ -1881,7 +1881,7 @@ static __init int register_PCI(int i, struct pci_dev *dev)
 	ByteIO_t UPCIRingInd = 0;
 
 	if (!dev || !pci_match_id(rocket_pci_ids, dev) ||
-	    pci_enable_device(dev))
+	    pci_enable_device(dev) || i >= NUM_BOARDS)
 		return 0;
 
 	rcktpt_io_addr[i] = pci_resource_start(dev, 0);

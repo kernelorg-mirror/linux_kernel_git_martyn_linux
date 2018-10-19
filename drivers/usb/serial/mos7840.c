@@ -468,6 +468,9 @@ static void mos7840_control_callback(struct urb *urb)
 	}
 
 	dev_dbg(dev, "%s urb buffer size is %d\n", __func__, urb->actual_length);
+	if (urb->actual_length < 1)
+		goto out;
+
 	dev_dbg(dev, "%s mos7840_port->MsrLsr is %d port %d\n", __func__,
 		mos7840_port->MsrLsr, mos7840_port->port_num);
 	data = urb->transfer_buffer;
@@ -555,9 +558,9 @@ static void mos7840_set_led_sync(struct usb_serial_port *port, __u16 reg,
 			val, reg, NULL, 0, MOS_WDR_TIMEOUT);
 }
 
-static void mos7840_led_off(unsigned long arg)
+static void mos7840_led_off(struct timer_list *t)
 {
-	struct moschip_port *mcs = (struct moschip_port *) arg;
+	struct moschip_port *mcs = from_timer(mcs, t, led_timer1);
 
 	/* Turn off LED */
 	mos7840_set_led_async(mcs, 0x0300, MODEM_CONTROL_REGISTER);
@@ -565,9 +568,9 @@ static void mos7840_led_off(unsigned long arg)
 				jiffies + msecs_to_jiffies(LED_OFF_MS));
 }
 
-static void mos7840_led_flag_off(unsigned long arg)
+static void mos7840_led_flag_off(struct timer_list *t)
 {
-	struct moschip_port *mcs = (struct moschip_port *) arg;
+	struct moschip_port *mcs = from_timer(mcs, t, led_timer2);
 
 	clear_bit_unlock(MOS7840_FLAG_LED_BUSY, &mcs->flags);
 }
@@ -802,18 +805,19 @@ static void mos7840_bulk_out_data_callback(struct urb *urb)
 	struct moschip_port *mos7840_port;
 	struct usb_serial_port *port;
 	int status = urb->status;
+	unsigned long flags;
 	int i;
 
 	mos7840_port = urb->context;
 	port = mos7840_port->port;
-	spin_lock(&mos7840_port->pool_lock);
+	spin_lock_irqsave(&mos7840_port->pool_lock, flags);
 	for (i = 0; i < NUM_URBS; i++) {
 		if (urb == mos7840_port->write_urb_pool[i]) {
 			mos7840_port->busy[i] = 0;
 			break;
 		}
 	}
-	spin_unlock(&mos7840_port->pool_lock);
+	spin_unlock_irqrestore(&mos7840_port->pool_lock, flags);
 
 	if (status) {
 		dev_dbg(&port->dev, "nonzero write bulk status received:%d\n", status);
@@ -2289,12 +2293,11 @@ static int mos7840_port_probe(struct usb_serial_port *port)
 			goto error;
 		}
 
-		setup_timer(&mos7840_port->led_timer1, mos7840_led_off,
-			    (unsigned long)mos7840_port);
+		timer_setup(&mos7840_port->led_timer1, mos7840_led_off, 0);
 		mos7840_port->led_timer1.expires =
 			jiffies + msecs_to_jiffies(LED_ON_MS);
-		setup_timer(&mos7840_port->led_timer2, mos7840_led_flag_off,
-			    (unsigned long)mos7840_port);
+		timer_setup(&mos7840_port->led_timer2, mos7840_led_flag_off,
+			    0);
 		mos7840_port->led_timer2.expires =
 			jiffies + msecs_to_jiffies(LED_OFF_MS);
 

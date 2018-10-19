@@ -308,6 +308,8 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 			     const struct dp_upcall_info *upcall_info,
 				 uint32_t cutlen)
 {
+	unsigned int gso_type = skb_shinfo(skb)->gso_type;
+	struct sw_flow_key later_key;
 	struct sk_buff *segs, *nskb;
 	int err;
 
@@ -318,9 +320,21 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 	if (segs == NULL)
 		return -EINVAL;
 
+	if (gso_type & SKB_GSO_UDP) {
+		/* The initial flow key extracted by ovs_flow_key_extract()
+		 * in this case is for a first fragment, so we need to
+		 * properly mark later fragments.
+		 */
+		later_key = *key;
+		later_key.ip.frag = OVS_FRAG_TYPE_LATER;
+	}
+
 	/* Queue all of the segments. */
 	skb = segs;
 	do {
+		if (gso_type & SKB_GSO_UDP && skb != segs)
+			key = &later_key;
+
 		err = queue_userspace_packet(dp, skb, key, upcall_info, cutlen);
 		if (err)
 			break;
@@ -1564,8 +1578,9 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 		goto err_destroy_table;
 	}
 
-	dp->ports = kmalloc(DP_VPORT_HASH_BUCKETS * sizeof(struct hlist_head),
-			    GFP_KERNEL);
+	dp->ports = kmalloc_array(DP_VPORT_HASH_BUCKETS,
+				  sizeof(struct hlist_head),
+				  GFP_KERNEL);
 	if (!dp->ports) {
 		err = -ENOMEM;
 		goto err_destroy_percpu;
@@ -2274,6 +2289,9 @@ static struct genl_family * const dp_genl_families[] = {
 	&dp_flow_genl_family,
 	&dp_packet_genl_family,
 	&dp_meter_genl_family,
+#if	IS_ENABLED(CONFIG_NETFILTER_CONNCOUNT)
+	&dp_ct_limit_genl_family,
+#endif
 };
 
 static void dp_unregister_genl(int n_families)
@@ -2309,8 +2327,7 @@ static int __net_init ovs_init_net(struct net *net)
 
 	INIT_LIST_HEAD(&ovs_net->dps);
 	INIT_WORK(&ovs_net->dp_notify_work, ovs_dp_notify_wq);
-	ovs_ct_init(net);
-	return 0;
+	return ovs_ct_init(net);
 }
 
 static void __net_exit list_vports_from_net(struct net *net, struct net *dnet,
@@ -2349,10 +2366,10 @@ static void __net_exit ovs_exit_net(struct net *dnet)
 	list_for_each_entry_safe(dp, dp_next, &ovs_net->dps, list_node)
 		__dp_destroy(dp);
 
-	rtnl_lock();
+	down_read(&net_rwsem);
 	for_each_net(net)
 		list_vports_from_net(net, dnet, &head);
-	rtnl_unlock();
+	up_read(&net_rwsem);
 
 	/* Detach all vports from given namespace. */
 	list_for_each_entry_safe(vport, vport_next, &head, detach_list) {
@@ -2455,3 +2472,4 @@ MODULE_ALIAS_GENL_FAMILY(OVS_VPORT_FAMILY);
 MODULE_ALIAS_GENL_FAMILY(OVS_FLOW_FAMILY);
 MODULE_ALIAS_GENL_FAMILY(OVS_PACKET_FAMILY);
 MODULE_ALIAS_GENL_FAMILY(OVS_METER_FAMILY);
+MODULE_ALIAS_GENL_FAMILY(OVS_CT_LIMIT_FAMILY);

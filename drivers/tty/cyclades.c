@@ -279,7 +279,7 @@ static unsigned detect_isa_irq(void __iomem *);
 #endif				/* CONFIG_ISA */
 
 #ifndef CONFIG_CYZ_INTR
-static void cyz_poll(unsigned long);
+static void cyz_poll(struct timer_list *);
 
 /* The Cyclades-Z polling cycle is defined by this variable */
 static long cyz_polling_cycle = CZ_DEF_POLL;
@@ -1214,7 +1214,7 @@ static void cyz_rx_restart(struct timer_list *t)
 
 #else				/* CONFIG_CYZ_INTR */
 
-static void cyz_poll(unsigned long arg)
+static void cyz_poll(struct timer_list *unused)
 {
 	struct cyclades_card *cinfo;
 	struct cyclades_port *info;
@@ -3972,19 +3972,6 @@ static int cyclades_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-static int cyclades_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, cyclades_proc_show, NULL);
-}
-
-static const struct file_operations cyclades_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= cyclades_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
-
 /* The serial driver boot-time initialization code!
     Hardware I/O ports are mapped to character special devices on a
     first found, first allocated manner.  That is, this code searches
@@ -4024,7 +4011,7 @@ static const struct tty_operations cy_ops = {
 	.tiocmget = cy_tiocmget,
 	.tiocmset = cy_tiocmset,
 	.get_icount = cy_get_icount,
-	.proc_fops = &cyclades_proc_fops,
+	.proc_show = cyclades_proc_show,
 };
 
 static int __init cy_init(void)

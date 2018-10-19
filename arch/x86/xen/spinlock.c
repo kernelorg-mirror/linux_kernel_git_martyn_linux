@@ -23,8 +23,6 @@ static DEFINE_PER_CPU(int, lock_kicker_irq) = -1;
 static DEFINE_PER_CPU(char *, irq_name);
 static bool xen_pvspin = true;
 
-#include <asm/qspinlock.h>
-
 static void xen_qlock_kick(int cpu)
 {
 	int irq = per_cpu(lock_kicker_irq, cpu);
@@ -131,6 +129,10 @@ PV_CALLEE_SAVE_REGS_THUNK(xen_vcpu_stolen);
  */
 void __init xen_init_spinlocks(void)
 {
+
+	/*  Don't need to use pvqspinlock code if there is only 1 vCPU. */
+	if (num_possible_cpus() == 1)
+		xen_pvspin = false;
 
 	if (!xen_pvspin) {
 		printk(KERN_DEBUG "xen: PV spinlocks disabled\n");
